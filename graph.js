@@ -1,114 +1,114 @@
-fetch('./graph.json')
-  .then(res => res.json())
-  .then(raw => {
+const width = window.innerWidth;
+const height = window.innerHeight;
 
-    const elements = [
-      ...raw.graph.nodes,
-      ...raw.graph.edges
-    ];
+const svg = d3.select("#graph").append("svg")
+  .attr("width", width)
+  .attr("height", height);
 
-    const cy = cytoscape({
-      container: document.getElementById('cy'),
-      elements,
+const simulation = d3.forceSimulation()
+  .force("link", d3.forceLink().id(d => d.id).distance(150))
+  .force("charge", d3.forceManyBody().strength(-300))
+  .force("center", d3.forceCenter(width / 2, height / 2));
 
-      layout: { name: 'preset' },
+let graphData = { nodes: [], links: [] };
 
-      style: [
-        {
-          selector: 'node',
-          style: {
-            'label': 'data(properties.name)',
-            'text-wrap': 'wrap',
-            'text-max-width': 140,
-            'font-size': 12,
-            'color': '#0f172a',
-            'background-color': '#38bdf8',
-            'text-valign': 'center',
-            'text-halign': 'center'
-          }
-        },
+// Color scheme by node type
+const colorScale = d3.scaleOrdinal()
+  .domain(["Type", "Fonds", "Series", "Context", "HIMO"])
+  .range(["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]);
 
-        {
-          selector: 'node[labels includes "HIMO"]',
-          style: {
-            'background-color': '#0ea5e9',
-            'font-size': 16,
-            'font-weight': 'bold'
-          }
-        },
+// Load your JSON graph
+d3.json("graph.json").then(data => {
+  graphData = data;
+  update(graphData);
+});
 
-        {
-          selector: 'node[labels includes "Type"]',
-          style: { 'background-color': '#22c55e' }
-        },
+function update(data) {
+  svg.selectAll("*").remove();
 
-        {
-          selector: 'node[labels includes "Context"]',
-          style: { 'background-color': '#a855f7' }
-        },
+  const link = svg.append("g")
+    .attr("class", "links")
+    .selectAll("line")
+    .data(data.edges)
+    .join("line")
+    .attr("class", "link")
+    .attr("stroke", "#aaa")
+    .attr("stroke-width", 1.5);
 
-        {
-          selector: 'node[labels includes "Fonds"]',
-          style: { 'background-color': '#f59e0b' }
-        },
+  const node = svg.append("g")
+    .attr("class", "nodes")
+    .selectAll("g")
+    .data(data.nodes)
+    .join("g")
+    .attr("class", "node")
+    .call(drag(simulation));
 
-        {
-          selector: 'node[labels includes "Series"]',
-          style: { 'background-color': '#e11d48' }
-        },
+  node.append("circle")
+    .attr("r", 20)
+    .attr("fill", d => colorScale(d.labels[0]))
+    .on("click", expandNode);
 
-        {
-          selector: 'edge',
-          style: {
-            'label': 'data(label)',
-            'curve-style': 'bezier',
-            'line-color': '#94a3b8',
-            'target-arrow-shape': 'triangle',
-            'target-arrow-color': '#94a3b8',
-            'font-size': 9
-          }
-        },
+  node.append("text")
+    .attr("dx", 25)
+    .attr("dy", ".35em")
+    .text(d => d.attributes.name);
 
-        {
-          selector: '.hidden',
-          style: { 'display': 'none' }
-        }
-      ]
-    });
+  simulation
+    .nodes(data.nodes)
+    .on("tick", ticked);
 
-    // ---- INITIAL STATE ----
-    const rootId = '6'; // HIMO
-    const root = cy.getElementById(rootId);
+  simulation.force("link")
+    .links(data.edges);
 
-    cy.elements().addClass('hidden');
-    root.removeClass('hidden');
+  function ticked() {
+    link
+      .attr("x1", d => d.source.x)
+      .attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x)
+      .attr("y2", d => d.target.y);
 
-    cy.center(root);
-    cy.zoom(1.3);
+    node.attr("transform", d => `translate(${d.x},${d.y})`);
+  }
+}
 
-    // ---- INTERACTION ----
-    cy.on('tap', 'node', evt => {
-      const node = evt.target;
+// Dragging behavior
+function drag(sim) {
+  function dragstarted(event, d) {
+    if (!event.active) sim.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+  }
 
-      // Leaf node → open URL (if present)
-      const url = node.data('properties')?.url;
-      if (url) {
-        window.open(url, '_blank');
-        return;
-      }
+  function dragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+  }
 
-      // Already expanded → do nothing
-      if (node.data('expanded')) return;
-      node.data('expanded', true);
+  function dragended(event, d) {
+    if (!event.active) sim.alphaTarget(0);
+    d.fx = null;
+    d.fy = null;
+  }
 
-      // Reveal children + edges
-      node.outgoers().removeClass('hidden');
+  return d3.drag()
+    .on("start", dragstarted)
+    .on("drag", dragged)
+    .on("end", dragended);
+}
 
-      cy.layout({
-        name: 'cose',
-        animate: true,
-        fit: false,
-        padding: 40
-      }).run();
-    });
-  });
+// Neo4j-style node expansion
+function expandNode(event, node) {
+  // Example dynamic behavior: add a dummy child node
+  const newNodeId = node.id + "_child";
+
+  if (!graphData.nodes.find(n => n.id === newNodeId)) {
+    const newNode = {
+      id: newNodeId,
+      labels: ["Series"],
+      attributes: { name: "New Series Node" }
+    };
+    graphData.nodes.push(newNode);
+    graphData.edges.push({ source: node.id, target: newNodeId, label: "HAS_SERIES", attributes: {} });
+    update(graphData);
+  }
+}

@@ -1,12 +1,27 @@
-html, body {
-  width: 100%;
-  height: 100%;
+body {
   margin: 0;
-  background: transparent;
-  font-family: system-ui, sans-serif;
+  font-family: sans-serif;
+  overflow: hidden;
+  background-color: #ffffff; /* white background */
 }
 
-#cy {
-  width: 100%;
-  height: 100%;
+#graph {
+  width: 100vw;
+  height: 100vh;
+}
+
+.node circle {
+  stroke: #000; /* black border around nodes */
+  stroke-width: 1.5px;
+}
+
+.node text {
+  pointer-events: none;
+  font-size: 12px;
+  fill: #000000; /* black text */
+}
+
+.link {
+  stroke: #aaa;
+  stroke-width: 1.5px;
 }
