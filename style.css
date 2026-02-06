@@ -11,7 +11,7 @@ body {
 }
 
 .node circle {
-  stroke: #000; /* black border around nodes */
+  stroke: #7c7c7c; /* black border around nodes */
   stroke-width: 1.5px;
 }
 
@@ -25,3 +25,12 @@ body {
   stroke: #aaa;
   stroke-width: 1.5px;
 }
+
+svg {
+  cursor: grab;
+}
+
+svg:active {
+  cursor: grabbing;
+}
+
