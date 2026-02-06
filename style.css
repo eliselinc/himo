@@ -19,6 +19,18 @@ body {
   pointer-events: none;
   font-size: 12px;
   fill: #000000; /* black text */
+  font-weight: normal;
+}
+
+.node text.himo { /* HIMO root node : larger, bold and white text */
+  fill: white;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.node text.fonds, .node text.context, .node text.pendingfonds { /* Main fonds nodes : larger and bold text */
+  font-weight: bold;
+  font-size: 14px;
 }
 
 .link {

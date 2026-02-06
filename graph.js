@@ -40,7 +40,14 @@ let visibleGraph = { nodes: [], edges: [] };
 // Color scheme
 const colorScale = d3.scaleOrdinal()
   .domain(["HIMO", "Fonds", "Subfonds", "Series", "Context", "PendingFonds"])
-  .range(["#020048", "#1f77b4", "#77a7ca", "#ebebf8", "#bc98df", "#56beb9"]);
+  .range(["#020048", "#88bfe7", "#c2def2", "#ebebf8", "#bc98df", "#56beb9"]);
+
+/* ---------------- HELPERS ---------------- */
+
+// Detect expandable nodes
+function isExpandable(node) {
+  return fullGraph.edges.some(e => e.source === node.id);
+}
 
 // Multiline text
 function wrapText(text, width) {
@@ -67,14 +74,14 @@ function wrapText(text, width) {
   };
 }
 
-/* ---------------- LOAD GRAPH ---------------- */
+/* ---------------- INITIALIZE GRAPH ---------------- */
 
 d3.json("graph.json").then(data => {
   fullGraph = data;
 
   // Find root node (HIMO)
   const root = fullGraph.nodes.find(
-    d => d.labels.includes("HIMO")
+    d => d.labels[0] === "HIMO"
   );
 
   // Initialize visible graph with root only
@@ -89,6 +96,7 @@ d3.json("graph.json").then(data => {
 function update() {
   container.selectAll("*").remove();
 
+  /* -------- LINKS -------- */
   const link = container.append("g")
     .attr("class", "links")
     .selectAll("line")
@@ -98,6 +106,7 @@ function update() {
     .attr("stroke", "#aaa")
     .attr("stroke-width", 1.5);
 
+  /* -------- NODES -------- */
   const node = container.append("g")
     .attr("class", "nodes")
     .selectAll("g")
@@ -106,8 +115,9 @@ function update() {
     .attr("class", "node")
     .call(drag(simulation));
 
+  /* -------- MAIN CIRCLE -------- */
   node.append("circle")
-    .attr("r", 40)
+    .attr("r", 48)
     .on("click", expandNode)
     .attr("fill", d => {
       // Couleurs spécifiques pour les fonds extra. Cherche le parent dans les edges visibles
@@ -120,18 +130,35 @@ function update() {
       // Sinon couleur par label selon les constantes définies plus haut
       return colorScale(d.labels[0]);
     });
+  
+  /* -------- OUTER RING (EXPANDABLE NODES) -------- */
+  node.filter(d => isExpandable(d) && !d._expanded)
+    .append("circle")
+    .attr("r", 54)
+    .attr("fill", "none")
+    .attr("stroke", "#555")
+    .attr("stroke-width", 1.5)
+    .attr("stroke-dasharray", "4 4")
+    .style("pointer-events", "none");
 
-  // Nom du noeud
-  const maxTextWidth = 80; // largeur max avant retour à la ligne
+  /* -------- NODE NAME -------- */
+  const defaultMaxWidth = 91; // largeur max avant retour à la ligne
   node.each(function(d) {
-    const lines = wrapText(d, maxTextWidth)(d);
+    // Exception for specific long node names
+    const nodeMaxWidth = d.attributes.name === "Literature Review : History of Management and Administrative Management in the US (1920-1950)"
+      ? 104
+      : defaultMaxWidth; // default max width
+    const lines = wrapText(d, nodeMaxWidth)(d);
+    const cssClass = d.labels[0] ? d.labels[0].toLowerCase() : null;
+
+
     const textElem = d3.select(this).append("text")
       .attr("x", 0)
       .attr("y", - (lines.length - 1) * 7) // centrer verticalement
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .style("pointer-events", "none")
-      .attr("fill", d.attributes.name === "HIMO" ? "white" : "black");
+      .attr("class", cssClass);
 
     lines.forEach((line, i) => {
       textElem.append("tspan")
@@ -140,27 +167,13 @@ function update() {
         .attr("dy", i === 0 ? 0 : 14); // espacement entre lignes
     });
   });
-  // V1 without wrap/multiline
-  // node.append("text")
-  //   .text(d => d.attributes.name)
-  //   .attr("fill", d => d.attributes.name === "HIMO" ? "white" : "black") // HIMO en blanc, reste en noir
-  //   .attr("text-anchor", "middle")        // centrer horizontalement
-  //   .attr("dominant-baseline", "middle")  // centrer verticalement
-  //   .style("pointer-events", "none")      // optional: allow clicks to pass through
-  //   .attr("x", 0)  // obligatoire pour centrer dans le <g> qui a transform
-  //   .attr("y", 0);
 
-  // URL if exists (link icon)
+  /* -------- URL ICON -------- */
   node.filter(d => d.attributes.url)  // uniquement pour les nœuds avec URL
     .append("text")
     .text("🔗")
-    .attr("x", 35)
-    // Positionner à droite du texte
-    // V1 without wrap/multiline
-    // .attr("x", d => {
-    //   return (d.attributes.name.length * 3) + 5;
-    // })
-    .attr("y", 30)
+    .attr("x", 40)
+    .attr("y", 35)
     .attr("text-anchor", "start") // commencer à l'endroit x défini
     .attr("dominant-baseline", "middle")
     .style("cursor", "pointer")
@@ -169,20 +182,8 @@ function update() {
       event.stopPropagation();       // empêche d'activer expandNode
       window.open(d.attributes.url, "_blank");
     });
-  // V1 URL complet sous le texte
-  // node.filter(d => d.attributes.url)  // ne concerne que les nœuds avec url
-  //   .append("text")
-  //   .text(d => d.attributes.url)
-  //   .attr("x", 0)
-  //   .attr("y", 28)  // décaler sous le cercle / nom
-  //   .attr("text-anchor", "middle")
-  //   .attr("fill", "#007bff")  // bleu discret pour le lien
-  //   .style("font-size", "10px")
-  //   .style("cursor", "pointer")
-  //   .on("click", (event, d) => {
-  //     window.open(d.attributes.url, "_blank");  // ouvre dans un nouvel onglet
-  //   });
 
+  /* -------- SIMULATION -------- */
   simulation.nodes(visibleGraph.nodes).on("tick", ticked);
   simulation.force("link").links(visibleGraph.edges);
   simulation.alpha(0.6).restart();
@@ -229,6 +230,7 @@ function drag(sim) {
 
 function expandNode(event, node) {
   event.stopPropagation();
+  node._expanded = true; // mark node as expanded
 
   // 🔒 Lock clicked node in place
   node.fx = node.x;
